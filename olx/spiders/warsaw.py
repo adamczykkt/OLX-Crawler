@@ -17,9 +17,12 @@ class WarsawSpider(scrapy.Spider):
             # }
         offersLinks = response.xpath('//table[@id="offers_table"]/tbody/tr[@class="wrap"]/td/div/table/tbody/tr[1]/td[contains(@class, "title-cell")]/div/h3/a/@href')
         for href in offersLinks:
-            yield response.follow(href, callback=self.parse_offer_page)
+            if 'olx.pl' in href.get(): 
+                yield response.follow(href, callback=self.parse_offer_page_olx)
+            elif 'otodom.pl' in href.get():
+                yield response.follow(href, callback=self.parse_offer_page_otodom)
 
-    def parse_offer_page(self, response):
+    def parse_offer_page_olx(self, response):
         # Get full offer details
         offer = response.xpath('//*[@id="offerdescription"]')
 
@@ -46,6 +49,36 @@ class WarsawSpider(scrapy.Spider):
 
         # Get ID and link (canonical)
         offerData['id'] = response.xpath('//*[@id="offerbottombar"]/ul/li[3]/strong').get()
+        offerData['url'] = response.xpath('/html/head/link[@rel="canonical"]/@href').get()
+        offerData['add_date'] = response.xpath('//*[@id="offerbottombar"]/ul/li[1]/em/strong/text()').get()
+        offerData['address'] = response.xpath('//*[@id="offeractions"]/div/div/div[@class="offer-user__address"]/address/p/text()').get()
+
+        return offerData
+
+    def parse_offer_page_otodom(self, response):
+        # Get title and price separately
+        title = response.xpath('//*[@id="root"]/article/header/div[1]/div/div/h1/text()').get()
+        price = response.xpath('//*[@id="root"]/article/header/div[2]/div[1]/div[2]/text()').get()
+        price = re.sub(r'z\u0142|\s', '', price)
+        offerData = {
+            'title' : title,
+            'price' : price
+        }
+
+        # Loop through remaining details
+        details = response.xpath('//*[@id="root"]/article/div[3]/div[1]/section[@class="section-overview"]/div/ul/li')
+        for detail in details:
+            name = detail.xpath('./text()').get()
+            value = detail.xpath('./strong/text()').get()
+            offerData[name] = value
+
+
+        offerData['type'] = response.xpath('//*[@id="root"]/article/section[2]/div[2]/div[1]/text()').get()
+        offerData['address'] = response.xpath('//*[@id="root"]/article/header/div[1]/div/div/div/a/text()').get()
+        offerID = response.xpath('//*[@id="root"]/article/div[3]/div[1]/div[3]/div/div[1]/text()').get()
+        offerID = offerID.split(':')[-1].strip()
+        offerData['id'] = offerID
+        offerData['add_time'] = response.xpath('//*[@id="root"]/article/div[3]/div[1]/div[3]/div/div[2]/text()').get()
         offerData['url'] = response.xpath('/html/head/link[@rel="canonical"]/@href').get()
 
         return offerData
