@@ -5,10 +5,24 @@
 # See documentation in:
 # https://docs.scrapy.org/en/latest/topics/items.html
 
-import scrapy
+from scrapy import Item, Field
+from scrapy.loader import ItemLoader
+from scrapy.loader.processors import TakeFirst, MapCompose, Compose, Identity
 
 
-class OlxItem(scrapy.Item):
-    # define the fields for your item here like:
-    # name = scrapy.Field()
-    pass
+class OfferItem(Item):
+    title = Field() #string
+    price = Field() #float
+    offerID = Field() #string
+    addDate = Field() #Datetime
+    location = Field() #string
+    offerType = Field() #string
+    level = Field() #string
+    bulidingType = Field() #string
+    area = Field() #float
+    bedrooms = Field() #string
+    additionalCost = Field() #float
+    url = Field() #string
+
+class OfferItemLoader(ItemLoader):
+    title_in = MapCompose(str.strip)
