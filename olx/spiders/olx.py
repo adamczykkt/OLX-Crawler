@@ -1,59 +1,54 @@
 # -*- coding: utf-8 -*-
 import scrapy
 import re
+from olx.items import OfferItemLoader, OfferItem
 
 
-class WarsawSpider(scrapy.Spider):
-    name = 'warsaw'
+DETAILS_MAPPING = {
+    'Oferta od' : 'offerType',
+    'Poziom' : 'level',
+    'Rodzaj zabudowy' : 'bulidingType',
+    'Powierzchnia' : 'area',
+    'Liczba pokoi' : 'roomCount',
+    'Czynsz (dodatkowo)' : 'additionalCost'
+}
+
+class OLXSpider(scrapy.Spider):
+    name = 'olx'
     allowed_domains = ['olx.pl', 'otodom.pl']
-    start_urls = ['https://www.olx.pl/nieruchomosci/mieszkania/wynajem/warszawa/']
+    start_urls = ['https://olx.pl/nieruchomosci/mieszkania/wynajem/warszawa/']
 
     def parse(self, response):
-        # offers = response.xpath('//table[@id="offers_table"]/tbody/tr[@class="wrap"]/td/div/table/tbody/tr[1]')
-        # for offer in offers:
-            # yield {
-            #     'title' : offer.xpath('./td[contains(@class, "title-cell")]/div/h3/a/strong/text()').get(),
-            #     'price' : offer.xpath('./td[contains(@class, "td-price")]/div/p/strong/text()').get()
-            # }
-        offersLinks = response.xpath('//table[@id="offers_table"]/tbody/tr[@class="wrap"]/td/div/table/tbody/tr[1]/td[contains(@class, "title-cell")]/div/h3/a/@href')
+        offersLinks = response.xpath('//table[@id="offers_table"]/tbody' \
+            '/tr[@class="wrap"]/td/div/table/tbody/tr[1]/td[contains(@class, "title-cell")]' \
+            '/div/h3/a/@href').getall()
         for href in offersLinks:
-            if 'olx.pl' in href.get(): 
+            if 'olx.pl' in href:#.get(): 
                 yield response.follow(href, callback=self.parse_offer_page_olx)
-            elif 'otodom.pl' in href.get():
-                yield response.follow(href, callback=self.parse_offer_page_otodom)
+            # elif 'otodom.pl' in href:#.get():
+            #     yield response.follow(href, callback=self.parse_offer_page_otodom)
 
     def parse_offer_page_olx(self, response):
-        # Get full offer details
-        offer = response.xpath('//*[@id="offerdescription"]')
+        loader = OfferItemLoader(item=OfferItem(), response=response)
+        descriptionLoader = loader.nested_xpath('//*[@id="offerdescription"]')
+        descriptionLoader.add_xpath('title', './div[1]/h1/text()')
+        descriptionLoader.add_css('price', '.pricelabel__value::text')
 
-        # Get title and price separately
-        title = offer.xpath('./div[1]/h1/text()').get().strip()
-        price = offer.xpath('./div/div/div[@class="pricelabel"]/strong/text()').get()
-        # try:
-        #     price = int(re.sub(r'z\u0142|\s', '', price))
-        # except:
-        #     price = None
-        price = re.sub(r'z\u0142|\s', '', price)
-
-        offerData = {
-            'title' : title,
-            'price' : price
-        }
-
-        # Loop through remaining details
-        details = offer.xpath('./div/ul[@class="offer-details"]/li/*[contains(@class, "offer-details__param")]')
+        details = response.xpath('//*[@id="offerdescription"]/div[2]/ul/li/*')
         for detail in details:
             name = detail.xpath('./span/text()').get()
             value = detail.xpath('./strong/text()').get()
-            offerData[name] = value
-
-        # Get ID and link (canonical)
-        offerData['id'] = response.xpath('//*[@id="offerbottombar"]/ul/li[3]/strong').get()
-        offerData['url'] = response.xpath('/html/head/link[@rel="canonical"]/@href').get()
-        offerData['add_date'] = response.xpath('//*[@id="offerbottombar"]/ul/li[1]/em/strong/text()').get()
-        offerData['address'] = response.xpath('//*[@id="offeractions"]/div/div/div[@class="offer-user__address"]/address/p/text()').get()
-
-        return offerData
+            fieldName = DETAILS_MAPPING.get(name, None)
+            if fieldName:
+                loader.add_value(fieldName, value)
+        
+        loader.add_xpath('url', '/html/head/link[@rel="canonical"]/@href')
+        loader.add_xpath('location', '//*[@id="offeractions"]/div[3]/div[2]/div[1]/address/p/text()')
+        
+        bottomLoader = loader.nested_xpath('//*[@id="offerbottombar"]/ul')
+        bottomLoader.add_xpath('offerID', './li[3]/strong/text()')
+        bottomLoader.add_xpath('addDate', './li[1]/em/strong/text()')        
+        return loader.load_item()
 
     def parse_offer_page_otodom(self, response):
         # Get title and price separately

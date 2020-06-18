@@ -20,9 +20,9 @@ class OfferItem(Item):
     level = Field() #string
     bulidingType = Field() #string
     area = Field() #float
-    bedrooms = Field() #string
+    roomCount = Field() #string
     additionalCost = Field() #float
     url = Field() #string
 
 class OfferItemLoader(ItemLoader):
-    title_in = MapCompose(str.strip)
+    pass
